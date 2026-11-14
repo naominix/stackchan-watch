@@ -17,7 +17,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.random.Random
@@ -159,42 +158,35 @@ private fun DrawScope.drawFace(face: FaceState) {
         cornerRadius = CornerRadius(faceW * 0.18f, faceW * 0.18f)
     )
 
-    // 目（縦長の楕円。開き具合で高さが変わる）
-    val eyeW = faceW * 0.085f
-    val eyeBaseH = faceH * 0.21f
-    val eyeCy = top + faceH * 0.42f
+    // 目（本家 m5stack-avatar の Eye は真円：直径は画面幅の約5%、中心は幅±22%・高さ40%）
+    // 開き具合で円を縦に潰し、閉じきると細い線になる（本家の閉眼表現）
+    val eyeD = faceW * 0.055f
+    val eyeCy = top + faceH * 0.40f
     val gazePxX = face.gazeX * faceW * 0.03f
     val gazePxY = face.gazeY * faceH * 0.03f
-    drawEye(cx - faceW * 0.19f + gazePxX, eyeCy + gazePxY, eyeW, eyeBaseH * face.leftEyeOpen.coerceIn(0.05f, 1f))
-    drawEye(cx + faceW * 0.19f + gazePxX, eyeCy + gazePxY, eyeW, eyeBaseH * face.rightEyeOpen.coerceIn(0.05f, 1f))
+    drawEye(cx - faceW * 0.215f + gazePxX, eyeCy + gazePxY, eyeD, face.leftEyeOpen)
+    drawEye(cx + faceW * 0.215f + gazePxX, eyeCy + gazePxY, eyeD, face.rightEyeOpen)
 
-    // 口（mouthOpen が大きいときは楕円、小さいときは笑顔の弧）
-    val mouthW = faceW * 0.22f
-    val mouthCy = top + faceH * 0.66f
-    if (face.mouthOpen > 0.25f) {
-        val mouthH = faceH * 0.16f * face.mouthOpen.coerceIn(0f, 1f)
-        drawOval(
-            color = Color.Black,
-            topLeft = Offset(cx - mouthW / 2f, mouthCy - mouthH / 2f),
-            size = Size(mouthW, mouthH)
-        )
-    } else {
-        drawArc(
-            color = Color.Black,
-            startAngle = 20f,
-            sweepAngle = 140f,
-            useCenter = false,
-            topLeft = Offset(cx - mouthW / 2f, mouthCy - faceH * 0.07f),
-            size = Size(mouthW, faceH * 0.14f),
-            style = Stroke(width = faceW * 0.022f)
-        )
-    }
+    // 口（本家 Mouth::draw 準拠：閉じているときは幅28%×高さ2%の細い横棒、
+    // 開くにつれて幅が15.6%まで狭まり高さが25%まで伸びる）
+    val open = face.mouthOpen.coerceIn(0f, 1f)
+    val mouthW = faceW * (0.28f + (0.156f - 0.28f) * open)
+    val mouthH = faceH * (0.02f + (0.25f - 0.02f) * open)
+    val mouthCy = top + faceH * 0.62f
+    drawRoundRect(
+        color = Color.Black,
+        topLeft = Offset(cx - mouthW / 2f, mouthCy - mouthH / 2f),
+        size = Size(mouthW, mouthH),
+        cornerRadius = CornerRadius(mouthH / 2f, mouthH / 2f)
+    )
 }
 
-private fun DrawScope.drawEye(cx: Float, cy: Float, w: Float, h: Float) {
+private fun DrawScope.drawEye(cx: Float, cy: Float, d: Float, open: Float) {
+    // 真円を縦に潰してまばたきを表す。閉じきっても線として残るよう最小高さを確保
+    val h = (d * open.coerceIn(0f, 1f)).coerceAtLeast(d * 0.12f)
     drawOval(
         color = Color.Black,
-        topLeft = Offset(cx - w / 2f, cy - h / 2f),
-        size = Size(w, h)
+        topLeft = Offset(cx - d / 2f, cy - h / 2f),
+        size = Size(d, h)
     )
 }
