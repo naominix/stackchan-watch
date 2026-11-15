@@ -272,16 +272,7 @@ private fun DrawScope.drawBubuBody(
     // 頭（白い丸）
     drawCircle(color = Color.White, radius = d / 2f, center = Offset(cx, headCy))
 
-    // 首まわりの茶色い輪（頭の下部に沿う帯）
-    drawArc(
-        color = brown,
-        startAngle = 35f,
-        sweepAngle = 110f,
-        useCenter = false,
-        topLeft = Offset(cx - d * 0.42f, headCy - d * 0.42f),
-        size = Size(d * 0.84f, d * 0.84f),
-        style = Stroke(width = d * 0.055f)
-    )
+    // 首まわりの輪は付けない（2026-11-15 本人判断：顔だけだと大きな口のように見えてしまうため）
 
     // ほっぺ（頭の表面のピンク着色。独立パーツにはしない＝本人の指定どおり）
     val cheekW = d * 0.17f
