@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -16,7 +17,11 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import java.util.Calendar
+import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.random.Random
@@ -118,13 +123,15 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun StackChanFace() {
     var face by remember { mutableStateOf(FaceState()) }
+    // 表情はタップで切り替える（フェーズ2）。本家6種を順に巡回する
+    var emotion by remember { mutableStateOf(Emotion.NEUTRAL) }
     val motions = remember { listOf(BlinkMotion(), BreathMotion()) }
 
     // 約33ms 間隔の tick で Motions を合成して適用する（本体の描画間隔に準拠）
     LaunchedEffect(Unit) {
         val tickMillis = 33L
         while (true) {
-            var next = FaceState(emotion = face.emotion, mouthOpen = face.mouthOpen)
+            var next = FaceState(emotion = emotion, mouthOpen = face.mouthOpen)
             for (motion in motions) {
                 next = motion.tick(tickMillis, next)
             }
@@ -133,7 +140,14 @@ fun StackChanFace() {
         }
     }
 
-    Canvas(modifier = Modifier.fillMaxSize()) {
+    Canvas(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable {
+                val order = Emotion.entries
+                emotion = order[(order.indexOf(emotion) + 1) % order.size]
+            }
+    ) {
         drawFace(face)
     }
 }
@@ -163,12 +177,16 @@ private fun DrawScope.drawFace(face: FaceState) {
 
     // 目（本家 m5stack-avatar の Eye は真円：直径は画面幅の約5%、中心は幅±22%・高さ40%）
     // 開き具合で円を縦に潰し、閉じきると細い線になる（本家の閉眼表現）
+    // 本家のデフォルト Face は眉の太さが0（＝眉なし）で、表情は目の切り欠きだけで表す。
+    // DOUBT は本家の Eye に切り欠きがなく、視線を横に流して「考え中」にする。
     val eyeD = faceW * 0.055f
     val eyeCy = top + faceH * 0.40f + partBreathPx
-    val gazePxX = face.gazeX * faceW * 0.03f
+    val doubtGazePx = if (face.emotion == Emotion.DOUBT) faceW * 0.045f else 0f
+    val gazePxX = face.gazeX * faceW * 0.03f + doubtGazePx
     val gazePxY = face.gazeY * faceH * 0.03f
-    drawEye(cx - faceW * 0.215f + gazePxX, eyeCy + gazePxY, eyeD, face.leftEyeOpen)
-    drawEye(cx + faceW * 0.215f + gazePxX, eyeCy + gazePxY, eyeD, face.rightEyeOpen)
+    // 本家では画面左の目が isLeft=false（キャラクター基準の右目）になる
+    drawEye(cx - faceW * 0.215f + gazePxX, eyeCy + gazePxY, eyeD, face.leftEyeOpen, face.emotion, isLeft = false)
+    drawEye(cx + faceW * 0.215f + gazePxX, eyeCy + gazePxY, eyeD, face.rightEyeOpen, face.emotion, isLeft = true)
 
     // 口（本家 Mouth::draw 準拠：閉じているときは幅28%×高さ2%の細い横棒、
     // 開くにつれて幅が15.6%まで狭まり高さが25%まで伸びる）
@@ -182,9 +200,45 @@ private fun DrawScope.drawFace(face: FaceState) {
         size = Size(mouthW, mouthH),
         cornerRadius = CornerRadius(mouthH / 2f, mouthH / 2f)
     )
+
+    // アナログ針（コンセプト：顔がメイン、時刻はアナログ針で重ねる）。
+    // 顔の邪魔をしないよう細く半透明寄りのグレーにし、秒針は付けない
+    val pivot = Offset(cx, top + faceH * 0.5f)
+    val now = Calendar.getInstance()
+    val hourAngle = Math.toRadians(((now.get(Calendar.HOUR) % 12) + now.get(Calendar.MINUTE) / 60.0) * 30.0)
+    val minuteAngle = Math.toRadians((now.get(Calendar.MINUTE) + now.get(Calendar.SECOND) / 60.0) * 6.0)
+    val handColor = Color(0xFF3A3A3A).copy(alpha = 0.78f)
+    drawLine(
+        color = handColor,
+        start = pivot,
+        end = Offset(
+            pivot.x + (faceW * 0.19f * sin(hourAngle)).toFloat(),
+            pivot.y - (faceW * 0.19f * cos(hourAngle)).toFloat()
+        ),
+        strokeWidth = faceW * 0.017f,
+        cap = StrokeCap.Round
+    )
+    drawLine(
+        color = handColor,
+        start = pivot,
+        end = Offset(
+            pivot.x + (faceW * 0.29f * sin(minuteAngle)).toFloat(),
+            pivot.y - (faceW * 0.29f * cos(minuteAngle)).toFloat()
+        ),
+        strokeWidth = faceW * 0.012f,
+        cap = StrokeCap.Round
+    )
+    drawCircle(color = handColor, radius = faceW * 0.02f, center = pivot)
 }
 
-private fun DrawScope.drawEye(cx: Float, cy: Float, d: Float, open: Float) {
+private fun DrawScope.drawEye(
+    cx: Float,
+    cy: Float,
+    d: Float,
+    open: Float,
+    emotion: Emotion,
+    isLeft: Boolean
+) {
     // 真円を縦に潰してまばたきを表す。閉じきっても線として残るよう最小高さを確保
     val h = (d * open.coerceIn(0f, 1f)).coerceAtLeast(d * 0.12f)
     drawOval(
@@ -192,4 +246,47 @@ private fun DrawScope.drawEye(cx: Float, cy: Float, d: Float, open: Float) {
         topLeft = Offset(cx - d / 2f, cy - h / 2f),
         size = Size(d, h)
     )
+    if (open <= 0.05f) return
+
+    // 表情は本家 Eye::draw の「地の色で切り欠く」方式をそのまま踏襲する
+    // （顔の地が白なので、白で切り欠けば本家と同じ形になる）
+    val rx = d / 2f
+    val ry = h / 2f
+    val pad = d * 0.12f
+    when (emotion) {
+        Emotion.ANGRY, Emotion.SAD -> {
+            // 上部を三角形に切り欠く。深く切る側は本家の式どおり：
+            // Angry は内側、Sad は外側が深くなる
+            val x2 = if ((!isLeft) != (emotion != Emotion.SAD)) cx - rx else cx + rx
+            val triangle = Path().apply {
+                moveTo(cx - rx, cy - ry)
+                lineTo(cx + rx, cy - ry)
+                lineTo(x2, cy)
+                close()
+            }
+            drawPath(triangle, Color.White)
+        }
+        Emotion.HAPPY -> {
+            // 中心を円で切り欠き、下半分を矩形で切り欠いて「にっこり ∩ 型」にする
+            drawOval(
+                color = Color.White,
+                topLeft = Offset(cx - rx / 1.5f, cy - rx / 1.5f),
+                size = Size(rx * 2f / 1.5f, rx * 2f / 1.5f)
+            )
+            drawRect(
+                color = Color.White,
+                topLeft = Offset(cx - rx - pad, cy),
+                size = Size(d + pad * 2f, ry + pad)
+            )
+        }
+        Emotion.SLEEPY -> {
+            // 上半分を矩形で切り欠いて、下向きの三日月（とろんとした目）にする
+            drawRect(
+                color = Color.White,
+                topLeft = Offset(cx - rx - pad, cy - ry),
+                size = Size(d + pad * 2f, ry + pad)
+            )
+        }
+        else -> Unit // NEUTRAL / DOUBT は切り欠きなし（DOUBT は視線で表す）
+    }
 }
