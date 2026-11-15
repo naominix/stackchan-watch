@@ -147,10 +147,11 @@ private fun DrawScope.drawFace(face: FaceState) {
     val faceH = faceW * 0.9f
     val left = (size.width - faceW) / 2f
     val top = (size.height - faceH) / 2f
-    // 呼吸（本家 Face::draw 準拠：顔の地は固定し、パーツだけが上下する。
-    // 目などは breath × 3px / 240、口は自前分と合わせて breath × 5px / 240 相当）
-    val partBreathPx = faceH * 0.0125f * face.breath
-    val mouthBreathPx = faceH * 0.021f * face.breath
+    // 呼吸（本家 Face::draw 準拠：顔の地は固定し、パーツだけが上下する）。
+    // 本家は目など breath × 3px / 240・口は × 5px / 240 だが、実機（Pixel Watch 4）では
+    // 小さすぎて見えなかったため、当面は本家の2倍の振幅にする（目 0.025、口 0.042）
+    val partBreathPx = faceH * 0.025f * face.breath
+    val mouthBreathPx = faceH * 0.042f * face.breath
     val cx = size.width / 2f
 
     // 顔の地（白い角丸）
