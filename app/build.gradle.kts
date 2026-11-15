@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -11,7 +13,7 @@ val debugKeystore = file("debug.keystore")
 val debugKeystoreB64 = file("debug.keystore.b64")
 if (!debugKeystore.exists() && debugKeystoreB64.exists()) {
     val encoded = debugKeystoreB64.readText().replace(Regex("\\s"), "")
-    debugKeystore.writeBytes(java.util.Base64.getDecoder().decode(encoded))
+    debugKeystore.writeBytes(Base64.getDecoder().decode(encoded))
 }
 
 android {

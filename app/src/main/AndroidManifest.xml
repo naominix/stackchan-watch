@@ -4,7 +4,9 @@
     <uses-feature android:name="android.hardware.type.watch" />
 
     <application
+        android:icon="@mipmap/ic_launcher"
         android:label="Stack-chan Watch"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@android:style/Theme.DeviceDefault">
         <activity
             android:name=".MainActivity"
