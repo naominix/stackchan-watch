@@ -296,8 +296,8 @@ private fun DrawScope.drawBubuBody(
     drawEye(cx - d * 0.185f + doubtGazePx, eyeCy, eyeD, face.leftEyeOpen, face.emotion, isLeft = false, eyeColor = eyeColor, carveColor = Color.White)
     drawEye(cx + d * 0.185f + doubtGazePx, eyeCy, eyeD, face.rightEyeOpen, face.emotion, isLeft = true, eyeColor = eyeColor, carveColor = Color.White)
 
-    // 口（ブブ用：表情ごとに小さく描き分ける）
-    drawBubuMouth(face.emotion, cx, headCy + d * 0.155f + mouthBreathPx, d, eyeColor)
+    // 口（ブブ用：表情ごとに小さく描き分ける。位置は本人の指摘で少し上へ）
+    drawBubuMouth(face.emotion, cx, headCy + d * 0.095f + mouthBreathPx, d, eyeColor)
 }
 
 private fun DrawScope.drawBubuMouth(emotion: Emotion, cx: Float, cy: Float, d: Float, color: Color) {
