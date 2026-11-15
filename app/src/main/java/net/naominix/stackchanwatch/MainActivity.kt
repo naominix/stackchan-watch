@@ -18,10 +18,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.nativeCanvas
 import java.util.Calendar
-import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.random.Random
@@ -201,34 +200,21 @@ private fun DrawScope.drawFace(face: FaceState) {
         cornerRadius = CornerRadius(mouthH / 2f, mouthH / 2f)
     )
 
-    // アナログ針（コンセプト：顔がメイン、時刻はアナログ針で重ねる）。
-    // 顔の邪魔をしないよう細く半透明寄りのグレーにし、秒針は付けない
-    val pivot = Offset(cx, top + faceH * 0.5f)
+    // 時刻はデジタル表示。アナログ針は顔の印象を壊すため、本人の判断で廃止した
+    // （2026-11-15）。額の位置に小さくグレーで出す
     val now = Calendar.getInstance()
-    val hourAngle = Math.toRadians(((now.get(Calendar.HOUR) % 12) + now.get(Calendar.MINUTE) / 60.0) * 30.0)
-    val minuteAngle = Math.toRadians((now.get(Calendar.MINUTE) + now.get(Calendar.SECOND) / 60.0) * 6.0)
-    val handColor = Color(0xFF3A3A3A).copy(alpha = 0.78f)
-    drawLine(
-        color = handColor,
-        start = pivot,
-        end = Offset(
-            pivot.x + (faceW * 0.19f * sin(hourAngle)).toFloat(),
-            pivot.y - (faceW * 0.19f * cos(hourAngle)).toFloat()
-        ),
-        strokeWidth = faceW * 0.017f,
-        cap = StrokeCap.Round
+    val timeText = "%02d:%02d".format(now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE))
+    drawContext.canvas.nativeCanvas.drawText(
+        timeText,
+        cx,
+        top + faceH * 0.17f,
+        android.graphics.Paint().apply {
+            color = android.graphics.Color.rgb(0x3A, 0x3A, 0x3A)
+            textSize = faceW * 0.072f
+            textAlign = android.graphics.Paint.Align.CENTER
+            isAntiAlias = true
+        }
     )
-    drawLine(
-        color = handColor,
-        start = pivot,
-        end = Offset(
-            pivot.x + (faceW * 0.29f * sin(minuteAngle)).toFloat(),
-            pivot.y - (faceW * 0.29f * cos(minuteAngle)).toFloat()
-        ),
-        strokeWidth = faceW * 0.012f,
-        cap = StrokeCap.Round
-    )
-    drawCircle(color = handColor, radius = faceW * 0.02f, center = pivot)
 }
 
 private fun DrawScope.drawEye(
