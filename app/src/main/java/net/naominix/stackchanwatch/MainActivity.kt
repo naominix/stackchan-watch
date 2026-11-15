@@ -96,8 +96,8 @@ class BlinkMotion(
     }
 }
 
-/** 呼吸（周期 6000ms、stack-chan 本体の BreathMotion に準拠）。breath は -1〜1。 */
-class BreathMotion(private val durationMillis: Long = 6000) : FaceMotion {
+/** 呼吸。周期は m5stack-avatar の facialLoop 準拠（33ms × 100カウント ≒ 3300ms）。breath は -1〜1。 */
+class BreathMotion(private val durationMillis: Long = 3300) : FaceMotion {
     private var elapsed: Long = 0
     override fun tick(tickMillis: Long, face: FaceState): FaceState {
         elapsed += tickMillis
@@ -145,9 +145,12 @@ private fun DrawScope.drawFace(face: FaceState) {
 
     val faceW = size.minDimension * 0.88f
     val faceH = faceW * 0.9f
-    val breathPx = faceH * 0.012f * face.breath
     val left = (size.width - faceW) / 2f
-    val top = (size.height - faceH) / 2f + breathPx
+    val top = (size.height - faceH) / 2f
+    // 呼吸（本家 Face::draw 準拠：顔の地は固定し、パーツだけが上下する。
+    // 目などは breath × 3px / 240、口は自前分と合わせて breath × 5px / 240 相当）
+    val partBreathPx = faceH * 0.0125f * face.breath
+    val mouthBreathPx = faceH * 0.021f * face.breath
     val cx = size.width / 2f
 
     // 顔の地（白い角丸）
@@ -161,7 +164,7 @@ private fun DrawScope.drawFace(face: FaceState) {
     // 目（本家 m5stack-avatar の Eye は真円：直径は画面幅の約5%、中心は幅±22%・高さ40%）
     // 開き具合で円を縦に潰し、閉じきると細い線になる（本家の閉眼表現）
     val eyeD = faceW * 0.055f
-    val eyeCy = top + faceH * 0.40f
+    val eyeCy = top + faceH * 0.40f + partBreathPx
     val gazePxX = face.gazeX * faceW * 0.03f
     val gazePxY = face.gazeY * faceH * 0.03f
     drawEye(cx - faceW * 0.215f + gazePxX, eyeCy + gazePxY, eyeD, face.leftEyeOpen)
@@ -172,7 +175,7 @@ private fun DrawScope.drawFace(face: FaceState) {
     val open = face.mouthOpen.coerceIn(0f, 1f)
     val mouthW = faceW * (0.28f + (0.156f - 0.28f) * open)
     val mouthH = faceH * (0.02f + (0.25f - 0.02f) * open)
-    val mouthCy = top + faceH * 0.62f
+    val mouthCy = top + faceH * 0.62f + mouthBreathPx
     drawRoundRect(
         color = Color.Black,
         topLeft = Offset(cx - mouthW / 2f, mouthCy - mouthH / 2f),
