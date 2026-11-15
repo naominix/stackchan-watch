@@ -45,7 +45,7 @@ enum class Emotion {
 
 /** 顔バリエーション（スキン）。表情はスキンの内側で切り替える2層構造にする。 */
 enum class FaceSkin {
-    ORIGINAL, BUBU
+    ORIGINAL, BUBU, LION
 }
 
 data class FaceState(
@@ -159,7 +159,7 @@ fun StackChanFace() {
                     emotion = order[(order.indexOf(emotion) + 1) % order.size]
                 },
                 onLongClick = {
-                    skin = if (skin == FaceSkin.ORIGINAL) FaceSkin.BUBU else FaceSkin.ORIGINAL
+                    skin = FaceSkin.values()[(skin.ordinal + 1) % FaceSkin.values().size]
                 }
             )
     ) {
@@ -184,6 +184,12 @@ private fun DrawScope.drawFace(face: FaceState, skin: FaceSkin) {
 
     if (skin == FaceSkin.BUBU) {
         drawBubuBody(face, cx, top, faceH, partBreathPx, mouthBreathPx)
+        drawDigitalTime(cx, top, faceW, faceH)
+        return
+    }
+
+    if (skin == FaceSkin.LION) {
+        drawLionBody(face, cx, top, faceH, partBreathPx, mouthBreathPx)
         drawDigitalTime(cx, top, faceW, faceH)
         return
     }
@@ -298,6 +304,99 @@ private fun DrawScope.drawBubuBody(
 
     // 口（ブブ用：表情ごとに小さく描き分ける。位置は本人の指摘で少し上へ）
     drawBubuMouth(face.emotion, cx, headCy + d * 0.095f + mouthBreathPx, d, eyeColor)
+}
+
+/**
+ * ライオンフェイス（顔バリエーション）。本人が提示した画像（2026-11-15）に寄せる：
+ * 大きな茶色のたてがみ、黄色い顔と小さい丸耳（内側ピンク）、クリーム色の口元、
+ * ピンクの鼻、左右3本ずつのひげ。目は切り欠き方式を共用し、口はブブ用を流用する。
+ */
+private fun DrawScope.drawLionBody(
+    face: FaceState,
+    cx: Float,
+    top: Float,
+    faceH: Float,
+    partBreathPx: Float,
+    mouthBreathPx: Float
+) {
+    val d = faceH // 顔の直径（たてがみはこれより大きく描く）
+    val headCy = top + faceH / 2f
+    val maneColor = Color(0xFF8A5A20)
+    val faceColor = Color(0xFFF6BE4A)
+    val innerEarColor = Color(0xFFF2A3A3)
+    val muzzleColor = Color(0xFFFFF6DC)
+    val noseColor = Color(0xFFF194A8)
+    val dark = Color(0xFF3B2A20)
+
+    // たてがみ（顔より大きな茶色の丸）
+    drawCircle(color = maneColor, radius = d * 0.62f, center = Offset(cx, headCy))
+
+    // 耳（たてがみの縁に乗る小さい丸耳、内側はピンク）
+    val earR = d * 0.105f
+    val earDx = d * 0.44f
+    val earDy = d * 0.44f
+    drawCircle(color = faceColor, radius = earR, center = Offset(cx - earDx, headCy - earDy))
+    drawCircle(color = faceColor, radius = earR, center = Offset(cx + earDx, headCy - earDy))
+    drawCircle(color = innerEarColor, radius = earR * 0.5f, center = Offset(cx - earDx, headCy - earDy))
+    drawCircle(color = innerEarColor, radius = earR * 0.5f, center = Offset(cx + earDx, headCy - earDy))
+
+    // 顔（黄色い丸）
+    drawCircle(color = faceColor, radius = d / 2f, center = Offset(cx, headCy))
+
+    // 口元（クリーム色の楕円を2つ並べる）
+    val muzzleW = d * 0.20f
+    val muzzleH = d * 0.17f
+    val muzzleCy = headCy + d * 0.16f + mouthBreathPx
+    drawOval(
+        color = muzzleColor,
+        topLeft = Offset(cx - d * 0.088f - muzzleW / 2f, muzzleCy - muzzleH / 2f),
+        size = Size(muzzleW, muzzleH)
+    )
+    drawOval(
+        color = muzzleColor,
+        topLeft = Offset(cx + d * 0.088f - muzzleW / 2f, muzzleCy - muzzleH / 2f),
+        size = Size(muzzleW, muzzleH)
+    )
+
+    // 鼻（口元の中央上にピンクの楕円）
+    drawOval(
+        color = noseColor,
+        topLeft = Offset(cx - d * 0.055f, headCy + d * 0.048f + mouthBreathPx),
+        size = Size(d * 0.11f, d * 0.075f)
+    )
+
+    // ひげ（左右3本ずつ、少し扇形に）
+    val whiskerStroke = d * 0.008f
+    val whiskerYs = floatArrayOf(0.12f, 0.17f, 0.22f)
+    val whiskerTilt = floatArrayOf(-0.012f, 0f, 0.016f)
+    for (i in whiskerYs.indices) {
+        val wy = headCy + d * whiskerYs[i] + mouthBreathPx
+        val tilt = d * whiskerTilt[i]
+        drawLine(
+            color = dark,
+            start = Offset(cx - d * 0.15f, wy),
+            end = Offset(cx - d * 0.335f, wy + tilt),
+            strokeWidth = whiskerStroke,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = dark,
+            start = Offset(cx + d * 0.15f, wy),
+            end = Offset(cx + d * 0.335f, wy + tilt),
+            strokeWidth = whiskerStroke,
+            cap = StrokeCap.Round
+        )
+    }
+
+    // 目（切り欠き方式は共通。地の色は顔の黄色）
+    val eyeD = d * 0.08f
+    val eyeCy = headCy - d * 0.05f + partBreathPx
+    val doubtGazePx = if (face.emotion == Emotion.DOUBT) d * 0.04f else 0f
+    drawEye(cx - d * 0.185f + doubtGazePx, eyeCy, eyeD, face.leftEyeOpen, face.emotion, isLeft = false, eyeColor = dark, carveColor = faceColor)
+    drawEye(cx + d * 0.185f + doubtGazePx, eyeCy, eyeD, face.rightEyeOpen, face.emotion, isLeft = true, eyeColor = dark, carveColor = faceColor)
+
+    // 口（ブブ用の描き分けを流用し、口元の下寄りに小さく置く）
+    drawBubuMouth(face.emotion, cx, headCy + d * 0.225f + mouthBreathPx, d, dark)
 }
 
 private fun DrawScope.drawBubuMouth(emotion: Emotion, cx: Float, cy: Float, d: Float, color: Color) {
