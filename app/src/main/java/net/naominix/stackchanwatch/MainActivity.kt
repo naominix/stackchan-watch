@@ -4,7 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -18,7 +19,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import java.util.Calendar
 import kotlin.math.pow
@@ -38,6 +41,11 @@ import kotlinx.coroutines.delay
 
 enum class Emotion {
     NEUTRAL, HAPPY, ANGRY, SAD, DOUBT, SLEEPY
+}
+
+/** 顔バリエーション（スキン）。表情はスキンの内側で切り替える2層構造にする。 */
+enum class FaceSkin {
+    ORIGINAL, BUBU
 }
 
 data class FaceState(
@@ -119,11 +127,14 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun StackChanFace() {
     var face by remember { mutableStateOf(FaceState()) }
     // 表情はタップで切り替える（フェーズ2）。本家6種を順に巡回する
     var emotion by remember { mutableStateOf(Emotion.NEUTRAL) }
+    // 顔バリエーション（ベース）はロングプレスで切り替える
+    var skin by remember { mutableStateOf(FaceSkin.ORIGINAL) }
     val motions = remember { listOf(BlinkMotion(), BreathMotion()) }
 
     // 約33ms 間隔の tick で Motions を合成して適用する（本体の描画間隔に準拠）
@@ -142,17 +153,22 @@ fun StackChanFace() {
     Canvas(
         modifier = Modifier
             .fillMaxSize()
-            .clickable {
-                val order = Emotion.entries
-                emotion = order[(order.indexOf(emotion) + 1) % order.size]
-            }
+            .combinedClickable(
+                onClick = {
+                    val order = Emotion.entries
+                    emotion = order[(order.indexOf(emotion) + 1) % order.size]
+                },
+                onLongClick = {
+                    skin = if (skin == FaceSkin.ORIGINAL) FaceSkin.BUBU else FaceSkin.ORIGINAL
+                }
+            )
     ) {
-        drawFace(face)
+        drawFace(face, skin)
     }
 }
 
-/** FaceState を Canvas に描く Renderer。当面は Stack-chan オリジナルフェイスのみ。 */
-private fun DrawScope.drawFace(face: FaceState) {
+/** FaceState を Canvas に描く Renderer。スキン（顔バリエーション）ごとに描き分ける。 */
+private fun DrawScope.drawFace(face: FaceState, skin: FaceSkin) {
     // 背景は黒（有機EL の省電力も兼ねる）
     drawRect(color = Color.Black)
 
@@ -165,6 +181,12 @@ private fun DrawScope.drawFace(face: FaceState) {
     val partBreathPx = faceH * 0.0125f * face.breath
     val mouthBreathPx = faceH * 0.021f * face.breath
     val cx = size.width / 2f
+
+    if (skin == FaceSkin.BUBU) {
+        drawBubuBody(face, cx, top, faceH, partBreathPx, mouthBreathPx)
+        drawDigitalTime(cx, top, faceW, faceH)
+        return
+    }
 
     // 顔の地（白い角丸）
     drawRoundRect(
@@ -200,8 +222,11 @@ private fun DrawScope.drawFace(face: FaceState) {
         cornerRadius = CornerRadius(mouthH / 2f, mouthH / 2f)
     )
 
-    // 時刻はデジタル表示。アナログ針は顔の印象を壊すため、本人の判断で廃止した
-    // （2026-11-15）。額の位置に小さくグレーで出す
+    drawDigitalTime(cx, top, faceW, faceH)
+}
+
+/** 時刻のデジタル表示。額の位置に小さくグレーで出す（両スキン共通）。 */
+private fun DrawScope.drawDigitalTime(cx: Float, top: Float, faceW: Float, faceH: Float) {
     val now = Calendar.getInstance()
     val timeText = "%02d:%02d".format(now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE))
     drawContext.canvas.nativeCanvas.drawText(
@@ -217,18 +242,158 @@ private fun DrawScope.drawFace(face: FaceState) {
     )
 }
 
+/**
+ * ブブフェイス（顔バリエーション）。今のアバターの特徴で構成する：
+ * 大きな丸い白い頭、茶色い丸耳、首まわりの茶色い輪、表面に塗ったピンクのほっぺ。
+ * 目はオリジナルと同じ切り欠き方式（地が白なのでそのまま使える）で表情を付け、
+ * 口だけブブ用に表情ごとに描き分ける。
+ */
+private fun DrawScope.drawBubuBody(
+    face: FaceState,
+    cx: Float,
+    top: Float,
+    faceH: Float,
+    partBreathPx: Float,
+    mouthBreathPx: Float
+) {
+    val d = faceH // 頭の直径
+    val headCy = top + faceH / 2f
+    val brown = Color(0xFF8A6642)
+    val eyeColor = Color(0xFF3B2A20)
+    val cheekColor = Color(0xFFF4B8C9)
+
+    // 耳（頭の後ろから覗く茶色い丸耳）
+    val earR = d * 0.17f
+    val earDx = d * 0.335f
+    val earDy = d * 0.345f
+    drawCircle(color = brown, radius = earR, center = Offset(cx - earDx, headCy - earDy))
+    drawCircle(color = brown, radius = earR, center = Offset(cx + earDx, headCy - earDy))
+
+    // 頭（白い丸）
+    drawCircle(color = Color.White, radius = d / 2f, center = Offset(cx, headCy))
+
+    // 首まわりの茶色い輪（頭の下部に沿う帯）
+    drawArc(
+        color = brown,
+        startAngle = 35f,
+        sweepAngle = 110f,
+        useCenter = false,
+        topLeft = Offset(cx - d * 0.42f, headCy - d * 0.42f),
+        size = Size(d * 0.84f, d * 0.84f),
+        style = Stroke(width = d * 0.055f)
+    )
+
+    // ほっぺ（頭の表面のピンク着色。独立パーツにはしない＝本人の指定どおり）
+    val cheekW = d * 0.17f
+    val cheekH = d * 0.105f
+    val cheekCy = headCy + d * 0.115f + partBreathPx
+    drawOval(
+        color = cheekColor,
+        topLeft = Offset(cx - d * 0.295f - cheekW / 2f, cheekCy - cheekH / 2f),
+        size = Size(cheekW, cheekH)
+    )
+    drawOval(
+        color = cheekColor,
+        topLeft = Offset(cx + d * 0.295f - cheekW / 2f, cheekCy - cheekH / 2f),
+        size = Size(cheekW, cheekH)
+    )
+
+    // 目（切り欠き方式はオリジナルと共通。色だけブブ用に濃い茶色）
+    val eyeD = d * 0.082f
+    val eyeCy = headCy - d * 0.045f + partBreathPx
+    val doubtGazePx = if (face.emotion == Emotion.DOUBT) d * 0.04f else 0f
+    drawEye(cx - d * 0.185f + doubtGazePx, eyeCy, eyeD, face.leftEyeOpen, face.emotion, isLeft = false, eyeColor = eyeColor, carveColor = Color.White)
+    drawEye(cx + d * 0.185f + doubtGazePx, eyeCy, eyeD, face.rightEyeOpen, face.emotion, isLeft = true, eyeColor = eyeColor, carveColor = Color.White)
+
+    // 口（ブブ用：表情ごとに小さく描き分ける）
+    drawBubuMouth(face.emotion, cx, headCy + d * 0.155f + mouthBreathPx, d, eyeColor)
+}
+
+private fun DrawScope.drawBubuMouth(emotion: Emotion, cx: Float, cy: Float, d: Float, color: Color) {
+    val w = d * 0.11f
+    val h = d * 0.075f
+    val stroke = Stroke(width = d * 0.016f, cap = StrokeCap.Round)
+    when (emotion) {
+        Emotion.HAPPY -> {
+            // 開いた笑口（下半分の半円を塗る）
+            drawArc(
+                color = color,
+                startAngle = 0f,
+                sweepAngle = 180f,
+                useCenter = true,
+                topLeft = Offset(cx - w / 2f, cy - h / 2f),
+                size = Size(w, h)
+            )
+        }
+        Emotion.SAD -> {
+            // ∩ 型（困り口）
+            drawArc(
+                color = color,
+                startAngle = 180f,
+                sweepAngle = 180f,
+                useCenter = false,
+                topLeft = Offset(cx - w / 2f, cy - h / 2f),
+                size = Size(w, h),
+                style = stroke
+            )
+        }
+        Emotion.ANGRY -> {
+            // 小さなへの字気味の直線
+            drawLine(
+                color = color,
+                start = Offset(cx - w * 0.32f, cy + h * 0.12f),
+                end = Offset(cx + w * 0.32f, cy - h * 0.12f),
+                strokeWidth = d * 0.016f,
+                cap = StrokeCap.Round
+            )
+        }
+        Emotion.SLEEPY -> {
+            // 小さな丸（あくび）
+            drawOval(
+                color = color,
+                topLeft = Offset(cx - d * 0.021f, cy - d * 0.021f),
+                size = Size(d * 0.042f, d * 0.042f)
+            )
+        }
+        Emotion.DOUBT -> {
+            // 横に寄せた小さな直線
+            drawLine(
+                color = color,
+                start = Offset(cx + d * 0.01f, cy),
+                end = Offset(cx + d * 0.01f + w * 0.55f, cy),
+                strokeWidth = d * 0.016f,
+                cap = StrokeCap.Round
+            )
+        }
+        else -> {
+            // NEUTRAL：小さな ∪ 型
+            drawArc(
+                color = color,
+                startAngle = 0f,
+                sweepAngle = 180f,
+                useCenter = false,
+                topLeft = Offset(cx - w / 2f, cy - h / 2f),
+                size = Size(w, h),
+                style = stroke
+            )
+        }
+    }
+}
+
 private fun DrawScope.drawEye(
     cx: Float,
     cy: Float,
     d: Float,
     open: Float,
     emotion: Emotion,
-    isLeft: Boolean
+    isLeft: Boolean,
+    eyeColor: Color = Color.Black,
+    carveColor: Color = Color.White
 ) {
     // 真円を縦に潰してまばたきを表す。閉じきっても線として残るよう最小高さを確保
     val h = (d * open.coerceIn(0f, 1f)).coerceAtLeast(d * 0.12f)
     drawOval(
-        color = Color.Black,
+        color = eyeColor,
         topLeft = Offset(cx - d / 2f, cy - h / 2f),
         size = Size(d, h)
     )
@@ -250,17 +415,17 @@ private fun DrawScope.drawEye(
                 lineTo(x2, cy)
                 close()
             }
-            drawPath(triangle, Color.White)
+            drawPath(triangle, carveColor)
         }
         Emotion.HAPPY -> {
             // 中心を円で切り欠き、下半分を矩形で切り欠いて「にっこり ∩ 型」にする
             drawOval(
-                color = Color.White,
+                color = carveColor,
                 topLeft = Offset(cx - rx / 1.5f, cy - rx / 1.5f),
                 size = Size(rx * 2f / 1.5f, rx * 2f / 1.5f)
             )
             drawRect(
-                color = Color.White,
+                color = carveColor,
                 topLeft = Offset(cx - rx - pad, cy),
                 size = Size(d + pad * 2f, ry + pad)
             )
@@ -268,7 +433,7 @@ private fun DrawScope.drawEye(
         Emotion.SLEEPY -> {
             // 上半分を矩形で切り欠いて、下向きの三日月（とろんとした目）にする
             drawRect(
-                color = Color.White,
+                color = carveColor,
                 topLeft = Offset(cx - rx - pad, cy - ry),
                 size = Size(d + pad * 2f, ry + pad)
             )
