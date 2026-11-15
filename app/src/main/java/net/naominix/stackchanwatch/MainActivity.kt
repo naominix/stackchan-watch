@@ -357,14 +357,24 @@ private fun DrawScope.drawBubuMouth(emotion: Emotion, cx: Float, cy: Float, d: F
             )
         }
         else -> {
-            // NEUTRAL：小さな ∪ 型
+            // NEUTRAL：w 型（∪ を2つ並べた猫口、本人の指定 2026-11-15）
+            val arcW = w / 2f
             drawArc(
                 color = color,
                 startAngle = 0f,
                 sweepAngle = 180f,
                 useCenter = false,
                 topLeft = Offset(cx - w / 2f, cy - h / 2f),
-                size = Size(w, h),
+                size = Size(arcW, h),
+                style = stroke
+            )
+            drawArc(
+                color = color,
+                startAngle = 0f,
+                sweepAngle = 180f,
+                useCenter = false,
+                topLeft = Offset(cx, cy - h / 2f),
+                size = Size(arcW, h),
                 style = stroke
             )
         }
