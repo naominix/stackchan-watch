@@ -301,7 +301,7 @@ private fun DrawScope.drawBubuBody(
 }
 
 private fun DrawScope.drawBubuMouth(emotion: Emotion, cx: Float, cy: Float, d: Float, color: Color) {
-    val w = d * 0.11f
+    val w = d * 0.15f
     val h = d * 0.075f
     val stroke = Stroke(width = d * 0.016f, cap = StrokeCap.Round)
     when (emotion) {
