@@ -8,12 +8,18 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -137,10 +143,29 @@ fun StackChanFace() {
     var skin by remember { mutableStateOf(FaceSkin.ORIGINAL) }
     val motions = remember { listOf(BlinkMotion(), BreathMotion()) }
 
+    // バックグラウンド（画面に出ていない間）は tick を完全に止める。
+    // ライフサイクルが RESUMED の間だけアニメーションを進める（2026-11-16 本人の依頼）。
+    var isResumed by remember { mutableStateOf(true) }
+    val context = LocalContext.current
+    DisposableEffect(context) {
+        val lifecycle = (context as? ComponentActivity)?.lifecycle
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> isResumed = true
+                Lifecycle.Event.ON_PAUSE -> isResumed = false
+                else -> Unit
+            }
+        }
+        lifecycle?.addObserver(observer)
+        onDispose { lifecycle?.removeObserver(observer) }
+    }
+
     // 約33ms 間隔の tick で Motions を合成して適用する（本体の描画間隔に準拠）
     LaunchedEffect(Unit) {
         val tickMillis = 33L
         while (true) {
+            // 止まっている間はポーリングせず、再開されるまで suspend して待つ
+            snapshotFlow { isResumed }.first { it }
             var next = FaceState(emotion = emotion, mouthOpen = face.mouthOpen)
             for (motion in motions) {
                 next = motion.tick(tickMillis, next)
